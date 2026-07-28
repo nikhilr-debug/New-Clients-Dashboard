@@ -21,13 +21,7 @@ st.set_page_config(
 # JSON KEY NORMALIZATION & MERGING LOGIC
 # ==========================================
 def normalize_key(key: str) -> str:
-    """Standardizes JSON keys by handling casing, camelCase, punctuation, and separators.
-
-    Examples:
-    'candidatePhoneNo'      -> 'candidate_phone_no'
-    'Candidate_Phone-No'    -> 'candidate_phone_no'
-    'CANDIDATE PHONE NO'    -> 'candidate_phone_no'
-    """
+    """Standardizes JSON keys by handling casing, camelCase, punctuation, and separators."""
     if not isinstance(key, str):
         key = str(key)
 
@@ -57,7 +51,6 @@ def parse_json_safely(val):
 
 def extract_and_merge_json(row):
     """Parses metaData and preOnboardingMetaData, normalizes keys,
-
     and merges entries so each normalized key exists only once.
     """
     meta_dict = parse_json_safely(row.get("metaData"))
@@ -75,7 +68,6 @@ def extract_and_merge_json(row):
     for k, v in meta_dict.items():
         norm_k = normalize_key(k)
         if v is not None and str(v).strip() != "":
-            # Prefer metaData if both exist and non-empty
             merged[norm_k] = v
 
     return merged
@@ -117,6 +109,9 @@ def fetch_and_process_data():
             axis=1,
         )
 
+        # DEDUPLICATE COLUMNS: Keep original base columns if keys overlap with JSON keys
+        final_df = final_df.loc[:, ~final_df.columns.duplicated(keep="first")]
+
         return final_df
 
     except Exception as e:
@@ -142,7 +137,7 @@ st.sidebar.header("🔍 Filter Options")
 
 # Client Filter
 clients = (
-    ["All"] + sorted(df["Report_Client"].dropna().unique().tolist())
+    ["All"] + sorted(df["Report_Client"].dropna().astype(str).unique().tolist())
     if "Report_Client" in df.columns
     else ["All"]
 )
@@ -150,7 +145,7 @@ selected_client = st.sidebar.selectbox("Select Report Client", clients)
 
 # VL Name Filter
 vl_names = (
-    ["All"] + sorted(df["vl_name"].dropna().unique().tolist())
+    ["All"] + sorted(df["vl_name"].dropna().astype(str).unique().tolist())
     if "vl_name" in df.columns
     else ["All"]
 )
@@ -190,7 +185,7 @@ with col1:
 
 with col2:
     unique_phones = (
-        filtered_df["candidate_phone_no"].nunique()
+        int(filtered_df["candidate_phone_no"].nunique())
         if "candidate_phone_no" in filtered_df.columns
         else 0
     )
@@ -198,19 +193,19 @@ with col2:
 
 with col3:
     unique_clients = (
-        filtered_df["Report_Client"].nunique()
+        int(filtered_df["Report_Client"].nunique())
         if "Report_Client" in filtered_df.columns
         else 0
     )
-    st.metric("Active Clients", unique_clients)
+    st.metric("Active Clients", f"{unique_clients:,}")
 
 with col4:
     unique_vls = (
-        filtered_df["vl_name"].nunique()
+        int(filtered_df["vl_name"].nunique())
         if "vl_name" in filtered_df.columns
         else 0
     )
-    st.metric("Active VLs", unique_vls)
+    st.metric("Active VLs", f"{unique_vls:,}")
 
 st.markdown("---")
 
@@ -235,7 +230,6 @@ st.write(
     f"Displaying **{len(filtered_df)}** records with normalized JSON keys expanded into columns."
 )
 
-# Option to toggle raw JSON columns
 show_raw_json = st.checkbox("Show raw metaData / preOnboardingMetaData columns", value=False)
 display_df = filtered_df.copy()
 
