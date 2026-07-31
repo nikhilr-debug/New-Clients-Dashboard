@@ -7,8 +7,10 @@ import streamlit as st
 # ==========================================
 # CONFIGURATION & CONSTANTS
 # ==========================================
-REDASH_URL = "https://redash.vahan.co/api/queries/18000/results"
 API_KEY = "4aFm2iOoyx8I91svQccdeZr0jmaiUsMFSRinZcmu"
+
+QUERY_A_URL = "https://redash.vahan.co/api/queries/18054/results"  # candidates + VL names
+QUERY_B_URL = "https://redash.vahan.co/api/queries/18055/results"  # UJF metadata
 
 st.set_page_config(
     page_title="Vahan Onboarding Analytics Dashboard",
@@ -24,15 +26,9 @@ def normalize_key(key: str) -> str:
     """Standardizes JSON keys by handling casing, camelCase, punctuation, and separators."""
     if not isinstance(key, str):
         key = str(key)
-
-    # Insert underscore between lower-to-upper transition (camelCase / PascalCase)
     s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", key)
     s2 = re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1)
-
-    # Replace non-alphanumeric characters with underscores
     clean_key = re.sub(r"[^a-zA-Z0-9]+", "_", s2)
-
-    # Lowercase, trim extra underscores, and collapse multiple underscores
     clean_key = clean_key.lower().strip("_")
     return re.sub(r"_+", "_", clean_key)
 
@@ -52,19 +48,18 @@ def parse_json_safely(val):
 def extract_and_merge_json(row):
     """Parses metaData and preOnboardingMetaData, normalizes keys,
     and merges entries so each normalized key exists only once.
+    preOnboardingMetaData is applied first; metaData overwrites/supplements it.
     """
     meta_dict = parse_json_safely(row.get("metaData"))
     pre_meta_dict = parse_json_safely(row.get("preOnboardingMetaData"))
 
     merged = {}
 
-    # 1. Process preOnboardingMetaData first
     for k, v in pre_meta_dict.items():
         norm_k = normalize_key(k)
         if v is not None and str(v).strip() != "":
             merged[norm_k] = v
 
-    # 2. Process metaData (overwrites or supplements preOnboardingMetaData)
     for k, v in meta_dict.items():
         norm_k = normalize_key(k)
         if v is not None and str(v).strip() != "":
@@ -74,62 +69,92 @@ def extract_and_merge_json(row):
 
 
 # ==========================================
-# DATA FETCHING & PROCESSING
+# DATA FETCHING
 # ==========================================
-@st.cache_data(ttl=600)  # Caches data for 10 minutes
-def fetch_and_process_data():
-    """Fetches data from Redash and expands/normalizes JSON columns."""
+def fetch_redash(url: str, label: str) -> pd.DataFrame:
+    """Fetches rows from a Redash query results endpoint."""
     try:
-        response = requests.get(
-            REDASH_URL, params={"api_key": API_KEY}, timeout=30
-        )
+        response = requests.get(url, params={"api_key": API_KEY}, timeout=60)
         response.raise_for_status()
-        res_json = response.json()
-
-        # Redash results structure parsing
-        rows = res_json.get("query_result", {}).get("data", {}).get("rows", [])
-        if not rows:
-            return pd.DataFrame()
-
-        df = pd.DataFrame(rows)
-
-        # Ensure createdAt is datetime
-        if "createdAt" in df.columns:
-            df["createdAt"] = pd.to_datetime(df["createdAt"])
-
-        # Extract and merge normalized JSON keys for every row
-        merged_json_series = df.apply(extract_and_merge_json, axis=1)
-
-        # Expand merged JSON dictionary into a separate DataFrame
-        json_expanded_df = pd.json_normalize(merged_json_series)
-
-        # Concatenate normalized JSON columns back to the primary DataFrame
-        final_df = pd.concat(
-            [df.reset_index(drop=True), json_expanded_df.reset_index(drop=True)],
-            axis=1,
+        rows = (
+            response.json()
+            .get("query_result", {})
+            .get("data", {})
+            .get("rows", [])
         )
-
-        # DEDUPLICATE COLUMNS: Keep original base columns if keys overlap with JSON keys
-        final_df = final_df.loc[:, ~final_df.columns.duplicated(keep="first")]
-
-        return final_df
-
+        if not rows:
+            st.warning(f"No rows returned from {label}.")
+            return pd.DataFrame()
+        return pd.DataFrame(rows)
     except Exception as e:
-        st.error(f"Error fetching data from Redash: {e}")
+        st.error(f"Error fetching {label}: {e}")
         return pd.DataFrame()
+
+
+@st.cache_data(ttl=600)
+def fetch_and_process_data() -> pd.DataFrame:
+    """
+    Fetches Pull A (candidates + VL names) and Pull B (UJF metadata) separately,
+    merges them on ujf_id in pandas, then expands normalized JSON columns.
+    """
+    df_a = fetch_redash(QUERY_A_URL, "Pull A (candidates + VL names)")
+    df_b = fetch_redash(QUERY_B_URL, "Pull B (UJF metadata)")
+
+    if df_a.empty or df_b.empty:
+        return pd.DataFrame()
+
+    # Normalize join key column names defensively
+    # Pull A is expected to have: ujf_id, referral_date_si, vl_phone_number, vl_name
+    # Pull B is expected to have: ujf_id, preOnboardingMetaData, metaData
+    if "ujf_id" not in df_a.columns or "ujf_id" not in df_b.columns:
+        st.error(
+            "Join key `ujf_id` missing in one of the query results. "
+            f"Pull A columns: {list(df_a.columns)} | Pull B columns: {list(df_b.columns)}"
+        )
+        return pd.DataFrame()
+
+    # Cast ujf_id to string on both sides to avoid UUID vs String type mismatch
+    df_a["ujf_id"] = df_a["ujf_id"].astype(str).str.strip()
+    df_b["ujf_id"] = df_b["ujf_id"].astype(str).str.strip()
+
+    # Inner join — only rows that exist in both queries
+    df = df_a.merge(df_b, on="ujf_id", how="inner")
+
+    if df.empty:
+        st.warning("Merge returned 0 rows — ujf_id values may not be overlapping between the two queries.")
+        return pd.DataFrame()
+
+    # Parse datetime columns
+    for col in ["referral_date_si", "createdAt"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+
+    # Expand and normalize metaData + preOnboardingMetaData
+    merged_json_series = df.apply(extract_and_merge_json, axis=1)
+    json_expanded_df = pd.json_normalize(merged_json_series)
+
+    final_df = pd.concat(
+        [df.reset_index(drop=True), json_expanded_df.reset_index(drop=True)],
+        axis=1,
+    )
+
+    # Deduplicate columns — keep original base columns if keys overlap
+    final_df = final_df.loc[:, ~final_df.columns.duplicated(keep="first")]
+
+    return final_df
 
 
 # ==========================================
 # STREAMLIT DASHBOARD UI
 # ==========================================
 st.title("🚀 Vahan Onboarding Analytics Dashboard")
-st.caption("Live dashboard powered by Redash Query Results API")
+st.caption("Live dashboard powered by Redash — dual-query fetch merged on ujf_id")
 
-with st.spinner("Fetching and expanding JSON dataset..."):
+with st.spinner("Fetching Pull A & Pull B from Redash and merging..."):
     df = fetch_and_process_data()
 
 if df.empty:
-    st.warning("No data retrieved from the Redash endpoint.")
+    st.warning("No data to display. Check Redash query results or ujf_id overlap.")
     st.stop()
 
 # --- SIDEBAR FILTERS ---
@@ -151,12 +176,13 @@ vl_names = (
 )
 selected_vl = st.sidebar.selectbox("Select VL Name", vl_names)
 
-# Date Filter
-if "createdAt" in df.columns and not df["createdAt"].isna().all():
-    min_date = df["createdAt"].min().date()
-    max_date = df["createdAt"].max().date()
+# Date Filter — use referral_date_si as primary, fall back to createdAt
+date_col = "referral_date_si" if "referral_date_si" in df.columns else "createdAt"
+if date_col in df.columns and not df[date_col].isna().all():
+    min_date = df[date_col].min().date()
+    max_date = df[date_col].max().date()
     date_range = st.sidebar.date_input(
-        "Created At Date Range", [min_date, max_date]
+        f"Date Range ({date_col})", [min_date, max_date]
     )
 else:
     date_range = []
@@ -164,17 +190,17 @@ else:
 # Apply Filters
 filtered_df = df.copy()
 
-if selected_client != "All":
+if selected_client != "All" and "Report_Client" in filtered_df.columns:
     filtered_df = filtered_df[filtered_df["Report_Client"] == selected_client]
 
-if selected_vl != "All":
+if selected_vl != "All" and "vl_name" in filtered_df.columns:
     filtered_df = filtered_df[filtered_df["vl_name"] == selected_vl]
 
-if len(date_range) == 2:
+if len(date_range) == 2 and date_col in filtered_df.columns:
     start_date, end_date = date_range
     filtered_df = filtered_df[
-        (filtered_df["createdAt"].dt.date >= start_date)
-        & (filtered_df["createdAt"].dt.date <= end_date)
+        (filtered_df[date_col].dt.date >= start_date)
+        & (filtered_df[date_col].dt.date <= end_date)
     ]
 
 # --- KPI METRICS ---
@@ -209,7 +235,7 @@ with col4:
 
 st.markdown("---")
 
-# --- CHARTS & VISUALIZATIONS ---
+# --- CHARTS ---
 chart_col1, chart_col2 = st.columns(2)
 
 with chart_col1:
@@ -224,13 +250,15 @@ with chart_col2:
         vl_counts = filtered_df["vl_name"].value_counts().head(10)
         st.bar_chart(vl_counts)
 
-# --- EXPANDED DATA TABLE ---
+# --- DATA TABLE ---
 st.subheader("📋 Parsed & Normalized Data Table")
 st.write(
-    f"Displaying **{len(filtered_df)}** records with normalized JSON keys expanded into columns."
+    f"Displaying **{len(filtered_df):,}** records with normalized JSON keys expanded into columns."
 )
 
-show_raw_json = st.checkbox("Show raw metaData / preOnboardingMetaData columns", value=False)
+show_raw_json = st.checkbox(
+    "Show raw metaData / preOnboardingMetaData columns", value=False
+)
 display_df = filtered_df.copy()
 
 if not show_raw_json:
@@ -240,7 +268,7 @@ if not show_raw_json:
 
 st.dataframe(display_df, use_container_width=True)
 
-# --- DOWNLOAD BUTTON ---
+# --- DOWNLOAD ---
 csv_data = display_df.to_csv(index=False).encode("utf-8")
 st.download_button(
     label="📥 Download Expanded CSV",
