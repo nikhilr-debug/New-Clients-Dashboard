@@ -104,7 +104,7 @@ def fetch_and_process_data() -> pd.DataFrame:
         return pd.DataFrame()
 
     # Normalize join key column names defensively
-    # Pull A is expected to have: ujf_id, referral_date_si, vl_phone_number, vl_name
+    # Pull A is expected to have: ujf_id, referral_date, vl_phone_number, vl_name
     # Pull B is expected to have: ujf_id, preOnboardingMetaData, metaData
     if "ujf_id" not in df_a.columns or "ujf_id" not in df_b.columns:
         st.error(
@@ -125,7 +125,7 @@ def fetch_and_process_data() -> pd.DataFrame:
         return pd.DataFrame()
 
     # Parse datetime columns
-    for col in ["referral_date_si", "createdAt"]:
+    for col in ["referral_date", "createdAt"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
@@ -176,8 +176,8 @@ vl_names = (
 )
 selected_vl = st.sidebar.selectbox("Select VL Name", vl_names)
 
-# Date Filter — use referral_date_si as primary, fall back to createdAt
-date_col = "referral_date_si" if "referral_date_si" in df.columns else "createdAt"
+# Date Filter — use referral_datei as primary, fall back to createdAt
+date_col = "referral_date" if "referral_date" in df.columns else "createdAt"
 if date_col in df.columns and not df[date_col].isna().all():
     min_date = df[date_col].min().date()
     max_date = df[date_col].max().date()
