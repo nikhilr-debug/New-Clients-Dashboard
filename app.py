@@ -296,7 +296,8 @@ def render_table(results: dict, window_labels: list, title: str):
         
         for idx, label in enumerate(window_labels):
             v = vals.get(label, 0)
-            formatted_val = f"{v:,}" if v > 0 else "<span style='opacity: 0.15;'>-</span>"
+            # Display explicitly as 0 if missing/null, with a subtle dim to keep it clean
+            formatted_val = f"{v:,}" if v > 0 else "<span style='opacity: 0.4;'>0</span>"
             css_class = "window-data" if idx >= 2 else ""
             body += f"<td class='{css_class}'>{formatted_val}</td>\n"
         
