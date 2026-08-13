@@ -8,9 +8,62 @@ REDASH_BASE_URL = "https://redash.vahan.co"
 REDASH_API_KEY  = "4aFm2iOoyx8I91svQccdeZr0jmaiUsMFSRinZcmu"       
 QUERY_ID        = 18055                                          
 
+# ─── CLIENT & MILESTONE DEFINITIONS ───────────────────────────────────────────
+CLIENT_MILESTONES = {
+    "big basket": [
+        "activation_date",
+        "first_date_of_work",
+        "marked_unique",
+        "onboarding_eligibility",
+    ],
+    "porter": [
+        "activation_date",
+        "document_successfully_uploaded_date",
+        "first_date_of_work",
+        "marked_unique",
+        "mitra_app_download",
+        "onboarding_eligibility",
+    ],
+    "rapido": [
+        "first_date_of_work",
+        "marked_unique",
+        "mitra_app_download",
+        "profile_pic_uploaded",
+        "signup_date",
+    ],
+    "uber": [
+        "first_date_of_work",
+        "marked_unique",
+        "mitra_app_download",
+        "signup_date",
+    ],
+    "pronto": [
+        "mitra_app_download",
+        "training_completed",
+        "first_date_of_work",
+    ],
+    "snabbit": [
+        "mitra_app_download",
+        "training_completed",
+        "first_date_of_work",
+    ],
+}
+
+MILESTONE_DISPLAY_NAMES = {
+    "activation_date": "Activation Date",
+    "document_successfully_uploaded_date": "Document Uploaded",
+    "first_date_of_work": "First Date of Work (FT)",
+    "marked_unique": "Marked Unique",
+    "mitra_app_download": "Mitra App Download",
+    "onboarding_eligibility": "Onboarding Eligibility",
+    "profile_pic_uploaded": "Profile Pic Uploaded",
+    "signup_date": "Signup Date",
+    "training_completed": "Training Completed",
+}
+
 # ─── PAGE SETUP ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Operations | MOE Command Center",
+    page_title="Operations | Multi-Client MOE Dashboard",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -23,18 +76,18 @@ st.markdown("""
   /* Force Dark Mode & Background Grid */
   html, body, [class*="css"], .stApp { 
       font-family: 'Inter', -apple-system, sans-serif !important; 
-      background-color: #09090b !important; /* Deep Zinc */
+      background-color: #09090b !important;
       color: #ededed !important;
   }
   
-  /* Vercel-style subtle background grid */
+  /* Vercel-style background grid */
   .stApp {
       background-image: linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
                         linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
       background-size: 40px 40px;
   }
 
-  /* Hide Streamlit default UI elements */
+  /* Hide Streamlit default header elements */
   header[data-testid="stHeader"] { background: transparent !important; }
   .stDeployButton { display: none; }
   
@@ -42,7 +95,7 @@ st.markdown("""
   .premium-card {
       background: linear-gradient(145deg, rgba(24, 24, 27, 0.9) 0%, rgba(9, 9, 11, 0.95) 100%);
       border-radius: 16px;
-      padding: 32px;
+      padding: 28px;
       margin-bottom: 2rem;
       border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: 
@@ -67,7 +120,7 @@ st.markdown("""
       color: #a1a1aa;
       font-weight: 600;
       text-align: right;
-      padding: 16px 24px;
+      padding: 14px 20px;
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.1em;
@@ -93,10 +146,9 @@ st.markdown("""
       border-bottom: none;
   }
   .moe-table tbody tr td {
-      padding: 18px 24px;
+      padding: 16px 20px;
       text-align: right;
       color: #f8fafc;
-      /* JetBrains Mono for perfect tabular alignment & elite dev look */
       font-family: 'JetBrains Mono', monospace;
       font-weight: 500;
       font-size: 14px;
@@ -113,7 +165,7 @@ st.markdown("""
   
   /* Numbers Highlight */
   .moe-table tbody tr td:not(.metric-name) {
-      color: #60a5fa; /* Electric Blue for numbers */
+      color: #60a5fa;
       text-shadow: 0 0 12px rgba(96, 165, 250, 0.2);
   }
   .moe-table tbody tr td.window-data {
@@ -124,31 +176,31 @@ st.markdown("""
   /* Hover Effects */
   .moe-table tbody tr:hover { 
       background: rgba(255, 255, 255, 0.03);
-      transform: scale(1.002);
-      border-radius: 8px;
+      transform: scale(1.001);
   }
   .moe-table tbody tr:hover td.metric-name {
       color: #ffffff;
   }
   
   /* Titles & Typography */
-  .gradient-title {
-      font-size: 32px; 
+  .card-title {
+      font-size: 22px; 
       font-weight: 800; 
       margin-bottom: 4px;
-      letter-spacing: -0.04em;
-      background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      display: inline-block;
+      letter-spacing: -0.03em;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
   }
   .dash-sub {
       font-size: 13px; 
       color: #71717a;
-      margin-bottom: 32px;
+      margin-bottom: 24px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
+      flex-wrap: wrap;
       font-weight: 500;
   }
 
@@ -156,7 +208,7 @@ st.markdown("""
   .badge {
       display: inline-flex;
       align-items: center;
-      padding: 4px 12px;
+      padding: 4px 10px;
       border-radius: 999px;
       font-size: 11px;
       font-weight: 700;
@@ -164,8 +216,7 @@ st.markdown("""
       text-transform: uppercase;
       box-shadow: 0 0 10px rgba(0,0,0,0.5);
   }
-  .badge-pronto  { background: rgba(59, 130, 246, 0.1); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); text-shadow: 0 0 8px rgba(96, 165, 250, 0.5); }
-  .badge-snabbit { background: rgba(236, 72, 153, 0.1); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.4); text-shadow: 0 0 8px rgba(244, 114, 182, 0.5); }
+  .badge-client { background: rgba(59, 130, 246, 0.1); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
   
   /* Sidebar Customization */
   [data-testid="stSidebar"] {
@@ -186,12 +237,16 @@ def fetch_redash() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# ─── COMPUTE METRICS ──────────────────────────────────────────────────────────
-def compute_metrics(df: pd.DataFrame, client_filter: list) -> tuple:
+# ─── COMPUTE CLIENT METRICS ───────────────────────────────────────────────────
+def compute_client_metrics(df: pd.DataFrame, client_name: str) -> tuple:
     today = date.today()
 
-    df["milestone_date"] = pd.to_datetime(df["milestone_date"]).dt.date
-    df = df[df["client"].str.lower().isin([c.lower() for c in client_filter])].copy()
+    df_client = df[df["client"].astype(str).str.lower().str.strip() == client_name.lower().strip()].copy()
+
+    if df_client.empty:
+        return {}, []
+
+    df_client["milestone_date"] = pd.to_datetime(df_client["milestone_date"]).dt.date
 
     windows = {
         f"{today.strftime('%Y-%m-%d')}":       today,
@@ -200,82 +255,51 @@ def compute_metrics(df: pd.DataFrame, client_filter: list) -> tuple:
         f"L7D ({(today-timedelta(7)).strftime('%m-%d')})": today - timedelta(7),
     }
 
-    lead = (
-        df.groupby(["phone_number", "assignee_id", "milestone_date"])
-        .apply(lambda g: pd.Series({
-            "has_app_dl":   int((g["milestone_name"] == "mitra_app_download").any()),
-            "has_training": int((g["milestone_name"] == "training_completed").any()),
-            "has_fod":      int((g["milestone_name"] == "first_date_of_work").any()),
-        }))
-        .reset_index()
-    )
-
-    vl_first = (
-        df.groupby("assignee_id")["milestone_date"]
-        .min()
-        .reset_index()
-        .rename(columns={"milestone_date": "first_referral_date"})
-    )
-    fod_rows = df[df["milestone_name"] == "first_date_of_work"]
-    vl_first_fod = (
-        fod_rows.groupby("assignee_id")["milestone_date"]
-        .min()
-        .reset_index()
-        .rename(columns={"milestone_date": "first_fod_date"})
-    )
-    vl = vl_first.merge(vl_first_fod, on="assignee_id", how="left")
-    lead = lead.merge(vl, on="assignee_id", how="left")
+    client_key = client_name.lower().strip()
+    if client_key in CLIENT_MILESTONES:
+        milestones = CLIENT_MILESTONES[client_key]
+    else:
+        milestones = sorted(df_client["milestone_name"].dropna().unique().tolist())
 
     results = {}
-    metric_defs = [
-        "VL Count (App Download)",
-        "Lead Count",
-        "App Download",
-        "App Download (Unique)",
-        "Training Completed",
-        "FT Done",
-        "New VL Count (Leads)",
-        "New VL Count (PLs)",
-    ]
+    results["Total Leads"] = {}
 
-    for metric in metric_defs:
-        results[metric] = {}
+    for m in milestones:
+        display_name = MILESTONE_DISPLAY_NAMES.get(m, m.replace('_', ' ').title())
+        results[display_name] = {}
 
     for label, cutoff in windows.items():
         is_today = label.startswith(str(today))
         is_yesterday = label.startswith(str(today - timedelta(1)))
 
-        if is_today: mask = lead["milestone_date"] == today
-        elif is_yesterday: mask = lead["milestone_date"] == (today - timedelta(1))
-        else: mask = lead["milestone_date"] >= cutoff
+        if is_today:
+            w = df_client[df_client["milestone_date"] == today]
+        elif is_yesterday:
+            w = df_client[df_client["milestone_date"] == (today - timedelta(1))]
+        else:
+            w = df_client[df_client["milestone_date"] >= cutoff]
 
-        w = lead[mask]
+        results["Total Leads"][label] = w["phone_number"].nunique() if "phone_number" in w.columns else len(w)
 
-        results["VL Count (App Download)"][label]  = w[w["has_app_dl"] == 1]["assignee_id"].nunique()
-        results["Lead Count"][label]               = w["phone_number"].nunique()
-        results["App Download"][label]             = w[w["has_app_dl"] == 1]["phone_number"].nunique()
-        results["App Download (Unique)"][label]    = w[w["has_app_dl"] == 1]["phone_number"].nunique()
-        results["Training Completed"][label]       = w[w["has_training"] == 1]["phone_number"].nunique()
-        results["FT Done"][label]                  = w[w["has_fod"] == 1]["phone_number"].nunique()
-
-        vl_mask = vl["first_referral_date"] == today if is_today else (vl["first_referral_date"] == (today - timedelta(1)) if is_yesterday else vl["first_referral_date"] >= cutoff)
-        results["New VL Count (Leads)"][label] = vl[vl_mask]["assignee_id"].nunique()
-
-        vl_fod = vl.dropna(subset=["first_fod_date"])
-        vl_fod_mask = vl_fod["first_fod_date"] == today if is_today else (vl_fod["first_fod_date"] == (today - timedelta(1)) if is_yesterday else vl_fod["first_fod_date"] >= cutoff)
-        results["New VL Count (PLs)"][label] = vl_fod[vl_fod_mask]["assignee_id"].nunique()
+        for m in milestones:
+            display_name = MILESTONE_DISPLAY_NAMES.get(m, m.replace('_', ' ').title())
+            m_df = w[w["milestone_name"].astype(str).str.lower().str.strip() == m.lower().strip()]
+            results[display_name][label] = m_df["phone_number"].nunique() if "phone_number" in m_df.columns else len(m_df)
 
     return results, list(windows.keys())
 
 
 # ─── RENDER TABLE ─────────────────────────────────────────────────────────────
 def render_table(results: dict, window_labels: list, title: str):
+    if not results:
+        st.info(f"No active milestone data found for **{title}**.")
+        return
+
     today = date.today()
     yesterday = today - timedelta(1)
 
-    # HTML strictly left-aligned to prevent markdown block parsing
     header_date_row = f"""<tr class='date-row'>
-<th rowspan='2' style='text-align: left; vertical-align: bottom; border-bottom: none;'>Command Metrics</th>
+<th rowspan='2' style='text-align: left; vertical-align: bottom; border-bottom: none;'>Milestone / Metric</th>
 <th>{today.strftime('%b %d')}</th>
 <th>{yesterday.strftime('%b %d')}</th>
 <th class='window-header'>{(today - timedelta(3)).strftime('%b %d')}</th>
@@ -296,7 +320,6 @@ def render_table(results: dict, window_labels: list, title: str):
         
         for idx, label in enumerate(window_labels):
             v = vals.get(label, 0)
-            # Display explicitly as 0 if missing/null, with a subtle dim to keep it clean
             formatted_val = f"{v:,}" if v > 0 else "<span style='opacity: 0.4;'>0</span>"
             css_class = "window-data" if idx >= 2 else ""
             body += f"<td class='{css_class}'>{formatted_val}</td>\n"
@@ -304,8 +327,8 @@ def render_table(results: dict, window_labels: list, title: str):
         body += "</tr>\n"
 
     html = f"""<div class='premium-card'>
-<div class='gradient-title'>{title}</div>
-<div style='overflow-x: auto; margin-top: 24px;'>
+<div class='card-title'><span>🏢</span> {title}</div>
+<div style='overflow-x: auto; margin-top: 16px;'>
 <table class='moe-table'>
 <thead>
 {header_date_row}
@@ -325,35 +348,30 @@ def render_table(results: dict, window_labels: list, title: str):
 def main():
     today = date.today()
 
-    # Premium Hero Banner
+    all_available_clients = ["big basket", "porter", "rapido", "uber", "pronto", "snabbit"]
+
     st.markdown(f"""
-<div style='margin-bottom: 2.5rem; padding-left: 8px;'>
-    <div style='font-size: 36px; font-weight: 800; letter-spacing: -0.05em; color: #ffffff;'>
-        Operations Performance
+<div style='margin-bottom: 2rem; padding-left: 4px;'>
+    <div style='font-size: 34px; font-weight: 800; letter-spacing: -0.04em; color: #ffffff;'>
+        Operations Command Center
     </div>
     <div class='dash-sub' style='margin-top: 8px;'>
-        <span class='badge badge-pronto'>Pronto</span>
-        <span class='badge badge-snabbit'>Snabbit</span>
+        {' '.join([f"<span class='badge badge-client'>{c.title()}</span>" for c in all_available_clients])}
         <span style='color: #3f3f46;'>|</span>
-        <span style='color: #a1a1aa;'>Live Projection &bull; {today.strftime('%B %d, %Y')}</span>
+        <span style='color: #a1a1aa;'>Live Data Stream &bull; {today.strftime('%B %d, %Y')}</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
     # ── Sidebar Controls ──
     with st.sidebar:
-        st.markdown("<h3 style='font-weight: 700; letter-spacing: -0.03em; color: #ffffff;'>Global Filters</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='font-weight: 700; letter-spacing: -0.03em; color: #ffffff;'>Filters</h3>", unsafe_allow_html=True)
         
-        clients = st.multiselect(
-            "Target Organizations", 
-            ["pronto", "snabbit"], 
-            default=["pronto", "snabbit"],
-            format_func=lambda x: x.upper()
-        )
-        
-        view = st.radio(
-            "Display Layout", 
-            ["Combined Stream", "Pronto Isolated", "Snabbit Isolated"]
+        selected_clients = st.multiselect(
+            "Select Clients to Display", 
+            all_available_clients, 
+            default=all_available_clients,
+            format_func=lambda x: x.title()
         )
         
         st.divider()
@@ -378,23 +396,30 @@ def main():
         st.warning("No operational data matrix found for the current configuration.")
         st.stop()
 
-    # ── Render Views ──
-    if view == "Combined Stream":
-        results, labels = compute_metrics(df_raw, clients)
-        render_table(results, labels, "Combined Fleet Intelligence")
+    if not selected_clients:
+        st.warning("Please select at least one client from the sidebar.")
+        st.stop()
 
-    elif view == "Pronto Isolated":
-        results, labels = compute_metrics(df_raw, ["pronto"])
-        render_table(results, labels, "Pronto Telemetry")
+    # ── Client Tabs View ──
+    tab_titles = ["All Clients Overview"] + [c.title() for c in selected_clients]
+    tabs = st.tabs(tab_titles)
 
-    else:
-        results, labels = compute_metrics(df_raw, ["snabbit"])
-        render_table(results, labels, "Snabbit Telemetry")
+    # Tab 1: All Selected Clients Stacked
+    with tabs[0]:
+        for client in selected_clients:
+            results, labels = compute_client_metrics(df_raw, client)
+            render_table(results, labels, f"{client.title()} Performance")
+
+    # Tabs 2+: Individual Client Tables
+    for idx, client in enumerate(selected_clients):
+        with tabs[idx + 1]:
+            results, labels = compute_client_metrics(df_raw, client)
+            render_table(results, labels, f"{client.title()} Performance")
 
     # Footer
     st.markdown(
         f"<div style='text-align: right; font-size: 11px; font-weight: 600; color: #52525b; margin-top: 2rem; padding-right: 8px; letter-spacing: 0.05em;'>"
-        f"CACHE CYCLE: 5M &nbsp;|&nbsp; NEXT REFRESH PENDING</div>", 
+        f"CACHE CYCLE: 5M &nbsp;|&nbsp; REFRESH PENDING</div>", 
         unsafe_allow_html=True
     )
 
