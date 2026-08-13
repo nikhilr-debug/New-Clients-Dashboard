@@ -1,278 +1,323 @@
-import json
-import re
+import streamlit as st
 import pandas as pd
 import requests
-import streamlit as st
+from datetime import date, timedelta
 
-# ==========================================
-# CONFIGURATION & CONSTANTS
-# ==========================================
-API_KEY = "4aFm2iOoyx8I91svQccdeZr0jmaiUsMFSRinZcmu"
+# ─── CONFIG ───────────────────────────────────────────────────────────────────
+REDASH_BASE_URL = "https://redash.vahan.co"
+REDASH_API_KEY  = "4aFm2iOoyx8I91svQccdeZr0jmaiUsMFSRinZcmu"       # ← replace
+QUERY_ID        = 18055                          # ← replace with your Redash query ID
 
-QUERY_A_URL = "https://redash.vahan.co/api/queries/18054/results"  # candidates + VL names
-QUERY_B_URL = "https://redash.vahan.co/api/queries/18055/results"  # UJF metadata
-
+# ─── PAGE SETUP ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Vahan Onboarding Analytics Dashboard",
-    page_icon="📊",
+    page_title="Pronto & Snabbit – MOE Dashboard",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
+st.markdown("""
+<style>
+  /* ── global ── */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+  .block-container { padding: 1.5rem 2rem; }
 
-# ==========================================
-# JSON KEY NORMALIZATION & MERGING LOGIC
-# ==========================================
-def normalize_key(key: str) -> str:
-    """Standardizes JSON keys by handling casing, camelCase, punctuation, and separators."""
-    if not isinstance(key, str):
-        key = str(key)
-    s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", key)
-    s2 = re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1)
-    clean_key = re.sub(r"[^a-zA-Z0-9]+", "_", s2)
-    clean_key = clean_key.lower().strip("_")
-    return re.sub(r"_+", "_", clean_key)
+  /* ── table wrapper ── */
+  .moe-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+
+  /* ── header rows ── */
+  .moe-table thead tr.date-row th {
+    background: #BDD7EE;
+    color: #1a2b3c;
+    font-weight: 700;
+    text-align: center;
+    padding: 6px 10px;
+    border: 1px solid #9ab8d4;
+    font-size: 12px;
+  }
+  .moe-table thead tr.date-row th.window-header {
+    background: #2E75B6;
+    color: white;
+  }
+  .moe-table thead tr.label-row th {
+    background: #BDD7EE;
+    color: #1a2b3c;
+    font-weight: 700;
+    text-align: center;
+    padding: 6px 10px;
+    border: 1px solid #9ab8d4;
+    font-size: 12px;
+  }
+  .moe-table thead tr.label-row th.metric-label {
+    text-align: left;
+  }
+
+  /* ── data rows ── */
+  .moe-table tbody tr td {
+    padding: 5px 10px;
+    border: 1px solid #d0d0d0;
+    text-align: center;
+    color: #1a1a1a;
+  }
+  .moe-table tbody tr td.metric-name {
+    text-align: left;
+    font-weight: 500;
+    color: #1a2b3c;
+    white-space: nowrap;
+  }
+  .moe-table tbody tr:nth-child(even) td { background: #f5f9fd; }
+  .moe-table tbody tr:nth-child(odd)  td { background: #ffffff; }
+  .moe-table tbody tr:hover td { background: #e8f2fb; }
+
+  /* ── title ── */
+  .dash-title {
+    font-size: 20px; font-weight: 700; color: #1a2b3c;
+    margin-bottom: 4px;
+  }
+  .dash-sub {
+    font-size: 13px; color: #666; margin-bottom: 18px;
+  }
+
+  /* ── client badge ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .badge-pronto  { background: #dbeafe; color: #1d4ed8; }
+  .badge-snabbit { background: #fce7f3; color: #be185d; }
+</style>
+""", unsafe_allow_html=True)
 
 
-def parse_json_safely(val):
-    """Safely parses JSON strings into dictionaries."""
-    if pd.isna(val) or val is None or val == "":
-        return {}
-    if isinstance(val, dict):
-        return val
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return {}
+# ─── FETCH RAW DATA ───────────────────────────────────────────────────────────
+@st.cache_data(ttl=300, show_spinner="Fetching data from Redash…")
+def fetch_redash(query_id: int, api_key: str) -> pd.DataFrame:
+    url = f"{REDASH_BASE_URL}/api/queries/{query_id}/results"
+    resp = requests.get(url, params={"api_key": api_key}, timeout=60)
+    resp.raise_for_status()
+    rows = resp.json()["query_result"]["data"]["rows"]
+    return pd.DataFrame(rows)
 
 
-def extract_and_merge_json(row):
-    """Parses metaData and preOnboardingMetaData, normalizes keys,
-    and merges entries so each normalized key exists only once.
-    preOnboardingMetaData is applied first; metaData overwrites/supplements it.
+# ─── COMPUTE METRICS ──────────────────────────────────────────────────────────
+def compute_metrics(df: pd.DataFrame, client_filter: list[str]) -> dict:
     """
-    meta_dict = parse_json_safely(row.get("metaData"))
-    pre_meta_dict = parse_json_safely(row.get("preOnboardingMetaData"))
-
-    merged = {}
-
-    for k, v in pre_meta_dict.items():
-        norm_k = normalize_key(k)
-        if v is not None and str(v).strip() != "":
-            merged[norm_k] = v
-
-    for k, v in meta_dict.items():
-        norm_k = normalize_key(k)
-        if v is not None and str(v).strip() != "":
-            merged[norm_k] = v
-
-    return merged
-
-
-# ==========================================
-# DATA FETCHING
-# ==========================================
-def fetch_redash(url: str, label: str) -> pd.DataFrame:
-    """Fetches rows from a Redash query results endpoint."""
-    try:
-        response = requests.get(url, params={"api_key": API_KEY}, timeout=60)
-        response.raise_for_status()
-        rows = (
-            response.json()
-            .get("query_result", {})
-            .get("data", {})
-            .get("rows", [])
-        )
-        if not rows:
-            st.warning(f"No rows returned from {label}.")
-            return pd.DataFrame()
-        return pd.DataFrame(rows)
-    except Exception as e:
-        st.error(f"Error fetching {label}: {e}")
-        return pd.DataFrame()
-
-
-@st.cache_data(ttl=600)
-def fetch_and_process_data() -> pd.DataFrame:
+    Expects columns from milestones_data raw export:
+      phone_number, assignee_id, milestone_name, milestone_date, client
+    Returns dict: metric_name -> {window_label: value}
     """
-    Fetches Pull A (candidates + VL names) and Pull B (UJF metadata) separately,
-    merges them on ujf_id in pandas, then expands normalized JSON columns.
-    """
-    df_a = fetch_redash(QUERY_A_URL, "Pull A (candidates + VL names)")
-    df_b = fetch_redash(QUERY_B_URL, "Pull B (UJF metadata)")
+    today = date.today()
 
-    if df_a.empty or df_b.empty:
-        return pd.DataFrame()
+    df["milestone_date"] = pd.to_datetime(df["milestone_date"]).dt.date
+    df = df[df["client"].str.lower().isin([c.lower() for c in client_filter])].copy()
 
-    # Normalize join key column names defensively
-    # Pull A is expected to have: ujf_id, referral_date, vl_phone_number, vl_name
-    # Pull B is expected to have: ujf_id, preOnboardingMetaData, metaData
-    if "ujf_id" not in df_a.columns or "ujf_id" not in df_b.columns:
-        st.error(
-            "Join key `ujf_id` missing in one of the query results. "
-            f"Pull A columns: {list(df_a.columns)} | Pull B columns: {list(df_b.columns)}"
-        )
-        return pd.DataFrame()
+    windows = {
+        f"{today.strftime('%Y-%m-%d')}":       today,
+        f"{(today - timedelta(1)).strftime('%Y-%m-%d')}": today - timedelta(1),
+        f"L3D ({(today-timedelta(3)).strftime('%m-%d')})": today - timedelta(3),
+        f"L7D ({(today-timedelta(7)).strftime('%m-%d')})": today - timedelta(7),
+    }
 
-    # Cast ujf_id to string on both sides to avoid UUID vs String type mismatch
-    df_a["ujf_id"] = df_a["ujf_id"].astype(str).str.strip()
-    df_b["ujf_id"] = df_b["ujf_id"].astype(str).str.strip()
-
-    # Inner join — only rows that exist in both queries
-    df = df_a.merge(df_b, on="ujf_id", how="inner")
-
-    if df.empty:
-        st.warning("Merge returned 0 rows — ujf_id values may not be overlapping between the two queries.")
-        return pd.DataFrame()
-
-    # Parse datetime columns
-    for col in ["referral_date", "createdAt"]:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
-
-    # Expand and normalize metaData + preOnboardingMetaData
-    merged_json_series = df.apply(extract_and_merge_json, axis=1)
-    json_expanded_df = pd.json_normalize(merged_json_series)
-
-    final_df = pd.concat(
-        [df.reset_index(drop=True), json_expanded_df.reset_index(drop=True)],
-        axis=1,
+    # ── per-lead flags (one row per phone_number × assignee_id × date) ──
+    lead = (
+        df.groupby(["phone_number", "assignee_id", "milestone_date"])
+        .apply(lambda g: pd.Series({
+            "has_app_dl":           int((g["milestone_name"] == "mitra_app_download").any()),
+            "has_training":         int((g["milestone_name"] == "training_completed").any()),
+            "has_fod":              int((g["milestone_name"] == "first_date_of_work").any()),
+        }))
+        .reset_index()
     )
 
-    # Deduplicate columns — keep original base columns if keys overlap
-    final_df = final_df.loc[:, ~final_df.columns.duplicated(keep="first")]
-
-    return final_df
-
-
-# ==========================================
-# STREAMLIT DASHBOARD UI
-# ==========================================
-st.title("🚀 Vahan Onboarding Analytics Dashboard")
-st.caption("Live dashboard powered by Redash — dual-query fetch merged on ujf_id")
-
-with st.spinner("Fetching Pull A & Pull B from Redash and merging..."):
-    df = fetch_and_process_data()
-
-if df.empty:
-    st.warning("No data to display. Check Redash query results or ujf_id overlap.")
-    st.stop()
-
-# --- SIDEBAR FILTERS ---
-st.sidebar.header("🔍 Filter Options")
-
-# Client Filter
-clients = (
-    ["All"] + sorted(df["Report_Client"].dropna().astype(str).unique().tolist())
-    if "Report_Client" in df.columns
-    else ["All"]
-)
-selected_client = st.sidebar.selectbox("Select Report Client", clients)
-
-# VL Name Filter
-vl_names = (
-    ["All"] + sorted(df["vl_name"].dropna().astype(str).unique().tolist())
-    if "vl_name" in df.columns
-    else ["All"]
-)
-selected_vl = st.sidebar.selectbox("Select VL Name", vl_names)
-
-# Date Filter — use referral_datei as primary, fall back to createdAt
-date_col = "referral_date" if "referral_date" in df.columns else "createdAt"
-if date_col in df.columns and not df[date_col].isna().all():
-    min_date = df[date_col].min().date()
-    max_date = df[date_col].max().date()
-    date_range = st.sidebar.date_input(
-        f"Date Range ({date_col})", [min_date, max_date]
+    # ── VL first dates (for New VL logic) ──
+    vl_first = (
+        df.groupby("assignee_id")["milestone_date"]
+        .min()
+        .reset_index()
+        .rename(columns={"milestone_date": "first_referral_date"})
     )
-else:
-    date_range = []
+    fod_rows = df[df["milestone_name"] == "first_date_of_work"]
+    vl_first_fod = (
+        fod_rows.groupby("assignee_id")["milestone_date"]
+        .min()
+        .reset_index()
+        .rename(columns={"milestone_date": "first_fod_date"})
+    )
+    vl = vl_first.merge(vl_first_fod, on="assignee_id", how="left")
+    lead = lead.merge(vl, on="assignee_id", how="left")
 
-# Apply Filters
-filtered_df = df.copy()
+    results = {}
 
-if selected_client != "All" and "Report_Client" in filtered_df.columns:
-    filtered_df = filtered_df[filtered_df["Report_Client"] == selected_client]
-
-if selected_vl != "All" and "vl_name" in filtered_df.columns:
-    filtered_df = filtered_df[filtered_df["vl_name"] == selected_vl]
-
-if len(date_range) == 2 and date_col in filtered_df.columns:
-    start_date, end_date = date_range
-    filtered_df = filtered_df[
-        (filtered_df[date_col].dt.date >= start_date)
-        & (filtered_df[date_col].dt.date <= end_date)
+    metric_defs = [
+        "VL Count (App Download)",
+        "Lead Count",
+        "App Download",
+        "App Download (Unique)",
+        "Training Completed",
+        "FT Done",
+        "New VL Count (Leads)",
+        "New VL Count (PLs)",
     ]
 
-# --- KPI METRICS ---
-col1, col2, col3, col4 = st.columns(4)
+    for metric in metric_defs:
+        results[metric] = {}
 
-with col1:
-    st.metric("Total Funnel Records", f"{len(filtered_df):,}")
+    for label, cutoff in windows.items():
+        # slice
+        is_today     = label.startswith(str(today))
+        is_yesterday = label.startswith(str(today - timedelta(1)))
 
-with col2:
-    unique_phones = (
-        int(filtered_df["candidate_phone_no"].nunique())
-        if "candidate_phone_no" in filtered_df.columns
-        else 0
-    )
-    st.metric("Unique Candidates", f"{unique_phones:,}")
+        if is_today:
+            mask = lead["milestone_date"] == today
+        elif is_yesterday:
+            mask = lead["milestone_date"] == (today - timedelta(1))
+        else:
+            mask = lead["milestone_date"] >= cutoff
 
-with col3:
-    unique_clients = (
-        int(filtered_df["Report_Client"].nunique())
-        if "Report_Client" in filtered_df.columns
-        else 0
-    )
-    st.metric("Active Clients", f"{unique_clients:,}")
+        w = lead[mask]
 
-with col4:
-    unique_vls = (
-        int(filtered_df["vl_name"].nunique())
-        if "vl_name" in filtered_df.columns
-        else 0
-    )
-    st.metric("Active VLs", f"{unique_vls:,}")
+        results["VL Count (App Download)"][label]  = w[w["has_app_dl"] == 1]["assignee_id"].nunique()
+        results["Lead Count"][label]               = w["phone_number"].nunique()
+        results["App Download"][label]             = w[w["has_app_dl"] == 1]["phone_number"].nunique()
+        results["App Download (Unique)"][label]    = w[w["has_app_dl"] == 1]["phone_number"].nunique()
+        results["Training Completed"][label]       = w[w["has_training"] == 1]["phone_number"].nunique()
+        results["FT Done"][label]                  = w[w["has_fod"] == 1]["phone_number"].nunique()
 
-st.markdown("---")
+        # New VL (Leads) — VLs whose first-ever referral date falls in window
+        if is_today:
+            vl_mask = vl["first_referral_date"] == today
+        elif is_yesterday:
+            vl_mask = vl["first_referral_date"] == (today - timedelta(1))
+        else:
+            vl_mask = vl["first_referral_date"] >= cutoff
+        results["New VL Count (Leads)"][label] = vl[vl_mask]["assignee_id"].nunique()
 
-# --- CHARTS ---
-chart_col1, chart_col2 = st.columns(2)
+        # New VL (PLs) — VLs whose first-ever FOD falls in window
+        vl_fod = vl.dropna(subset=["first_fod_date"])
+        if is_today:
+            vl_fod_mask = vl_fod["first_fod_date"] == today
+        elif is_yesterday:
+            vl_fod_mask = vl_fod["first_fod_date"] == (today - timedelta(1))
+        else:
+            vl_fod_mask = vl_fod["first_fod_date"] >= cutoff
+        results["New VL Count (PLs)"][label] = vl_fod[vl_fod_mask]["assignee_id"].nunique()
 
-with chart_col1:
-    st.subheader("Client Distribution")
-    if "Report_Client" in filtered_df.columns:
-        client_counts = filtered_df["Report_Client"].value_counts()
-        st.bar_chart(client_counts)
+    return results, list(windows.keys())
 
-with chart_col2:
-    st.subheader("Top 10 VL Performance")
-    if "vl_name" in filtered_df.columns:
-        vl_counts = filtered_df["vl_name"].value_counts().head(10)
-        st.bar_chart(vl_counts)
 
-# --- DATA TABLE ---
-st.subheader("📋 Parsed & Normalized Data Table")
-st.write(
-    f"Displaying **{len(filtered_df):,}** records with normalized JSON keys expanded into columns."
-)
+# ─── RENDER TABLE ─────────────────────────────────────────────────────────────
+def render_table(results: dict, window_labels: list[str], title: str):
+    today     = date.today()
+    yesterday = today - timedelta(1)
 
-show_raw_json = st.checkbox(
-    "Show raw metaData / preOnboardingMetaData columns", value=False
-)
-display_df = filtered_df.copy()
+    # header date labels
+    date_headers = [
+        ("", ""),                             # metric col
+        (str(today),    ""),                  # today
+        (str(yesterday),""),                  # yesterday
+        (str(today - timedelta(3)), "L3D"),   # L3D anchor date
+        (str(today - timedelta(7)), "L7D"),   # L7D anchor date
+    ]
 
-if not show_raw_json:
-    display_df = display_df.drop(
-        columns=["metaData", "preOnboardingMetaData"], errors="ignore"
-    )
+    header_date_row = "<tr class='date-row'>"
+    header_date_row += "<th rowspan='2' class='metric-label'>Metrics (MOE)</th>"
+    header_date_row += f"<th>{today}</th>"
+    header_date_row += f"<th>{yesterday}</th>"
+    header_date_row += f"<th class='window-header'>{today - timedelta(3)}</th>"
+    header_date_row += f"<th class='window-header'>{today - timedelta(7)}</th>"
+    header_date_row += "</tr>"
 
-st.dataframe(display_df, use_container_width=True)
+    header_label_row = "<tr class='label-row'>"
+    header_label_row += f"<th>{today.strftime('%Y-%m-%d')}</th>"
+    header_label_row += f"<th>{yesterday.strftime('%Y-%m-%d')}</th>"
+    header_label_row += "<th class='window-header'>L3D</th>"
+    header_label_row += "<th class='window-header'>L7D</th>"
+    header_label_row += "</tr>"
 
-# --- DOWNLOAD ---
-csv_data = display_df.to_csv(index=False).encode("utf-8")
-st.download_button(
-    label="📥 Download Expanded CSV",
-    data=csv_data,
-    file_name="vahan_parsed_funnel_data.csv",
-    mime="text/csv",
-)
+    body = ""
+    for metric, vals in results.items():
+        body += "<tr>"
+        body += f"<td class='metric-name'>{metric}</td>"
+        for label in window_labels:
+            v = vals.get(label, 0)
+            body += f"<td>{v:,}</td>"
+        body += "</tr>"
+
+    html = f"""
+    <div style='margin-bottom:24px'>
+      <div class='dash-title'>{title}</div>
+    </div>
+    <table class='moe-table'>
+      <thead>
+        {header_date_row}
+        {header_label_row}
+      </thead>
+      <tbody>
+        {body}
+      </tbody>
+    </table>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
+
+# ─── MAIN ─────────────────────────────────────────────────────────────────────
+def main():
+    today = date.today()
+
+    st.markdown(f"""
+    <div class='dash-title'>📊 Pronto & Snabbit — MOE Dashboard</div>
+    <div class='dash-sub'>
+      <span class='badge badge-pronto'>Pronto</span>
+      <span class='badge badge-snabbit'>Snabbit</span>
+      &nbsp;·&nbsp; As of <b>{today}</b>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── sidebar controls ──
+    with st.sidebar:
+        st.header("Settings")
+        api_key  = st.text_input("Redash API Key",  value=REDASH_API_KEY,  type="password")
+        query_id = st.number_input("Query ID", value=QUERY_ID, step=1)
+        clients  = st.multiselect(
+            "Clients", ["pronto", "snabbit"], default=["pronto", "snabbit"]
+        )
+        refresh  = st.button("🔄 Refresh Data")
+        if refresh:
+            st.cache_data.clear()
+
+    # ── fetch ──
+    try:
+        df_raw = fetch_redash(int(query_id), api_key)
+    except Exception as e:
+        st.error(f"Failed to fetch data from Redash: {e}")
+        st.info("Make sure your API key and Query ID are correct in the sidebar.")
+        return
+
+    if df_raw.empty:
+        st.warning("No data returned from Redash query.")
+        return
+
+    # ── split by client or show combined ──
+    view = st.radio("View", ["Combined", "Pronto only", "Snabbit only"], horizontal=True)
+
+    if view == "Combined":
+        results, labels = compute_metrics(df_raw, clients)
+        render_table(results, labels, "Pronto + Snabbit — Combined")
+
+    elif view == "Pronto only":
+        results, labels = compute_metrics(df_raw, ["pronto"])
+        render_table(results, labels, "Pronto")
+
+    else:
+        results, labels = compute_metrics(df_raw, ["snabbit"])
+        render_table(results, labels, "Snabbit")
+
+    st.markdown(f"<div style='font-size:11px;color:#999;margin-top:12px'>Data refreshes every 5 min · Last load: {pd.Timestamp.now().strftime('%H:%M:%S')}</div>", unsafe_allow_html=True)
+
+
+if __name__ == "__main__":
+    main()
