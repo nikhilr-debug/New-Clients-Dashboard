@@ -3,113 +3,142 @@ import pandas as pd
 import requests
 from datetime import date, timedelta
 
-# ─── CONFIG ───────────────────────────────────────────────────────────────────
+# ─── CONFIG (HIDDEN FROM UI) ──────────────────────────────────────────────────
 REDASH_BASE_URL = "https://redash.vahan.co"
-REDASH_API_KEY  = "4aFm2iOoyx8I91svQccdeZr0jmaiUsMFSRinZcmu"       # ← replace
-QUERY_ID        = 18055                          # ← replace with your Redash query ID
+REDASH_API_KEY  = "4aFm2iOoyx8I91svQccdeZr0jmaiUsMFSRinZcmu"       
+QUERY_ID        = 18055                                          
 
 # ─── PAGE SETUP ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Pronto & Snabbit – MOE Dashboard",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
+# ─── PREMIUM CSS STYLING ──────────────────────────────────────────────────────
 st.markdown("""
 <style>
-  /* ── global ── */
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-  html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-  .block-container { padding: 1.5rem 2rem; }
+  
+  html, body, [class*="css"] { 
+      font-family: 'Inter', sans-serif; 
+  }
+  
+  /* Main Container */
+  .dashboard-container {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      border: 1px solid #e5e7eb;
+      margin-bottom: 2rem;
+  }
 
-  /* ── table wrapper ── */
-  .moe-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  /* Table Wrapper */
+  .moe-table { 
+      border-collapse: separate; 
+      border-spacing: 0;
+      width: 100%; 
+      font-size: 14px; 
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+  }
 
-  /* ── header rows ── */
-  .moe-table thead tr.date-row th {
-    background: #BDD7EE;
-    color: #1a2b3c;
-    font-weight: 700;
-    text-align: center;
-    padding: 6px 10px;
-    border: 1px solid #9ab8d4;
-    font-size: 12px;
+  /* Header Styles */
+  .moe-table thead tr th {
+      background: #f8fafc;
+      color: #334155;
+      font-weight: 600;
+      text-align: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e5e7eb;
+      border-right: 1px solid #e5e7eb;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+  }
+  .moe-table thead tr th:last-child {
+      border-right: none;
   }
   .moe-table thead tr.date-row th.window-header {
-    background: #2E75B6;
-    color: white;
-  }
-  .moe-table thead tr.label-row th {
-    background: #BDD7EE;
-    color: #1a2b3c;
-    font-weight: 700;
-    text-align: center;
-    padding: 6px 10px;
-    border: 1px solid #9ab8d4;
-    font-size: 12px;
-  }
-  .moe-table thead tr.label-row th.metric-label {
-    text-align: left;
+      background: #eff6ff;
+      color: #1d4ed8;
   }
 
-  /* ── data rows ── */
+  /* Data Rows */
   .moe-table tbody tr td {
-    padding: 5px 10px;
-    border: 1px solid #d0d0d0;
-    text-align: center;
-    color: #1a1a1a;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e5e7eb;
+      border-right: 1px solid #e5e7eb;
+      text-align: center;
+      color: #475569;
+      font-variant-numeric: tabular-nums;
+  }
+  .moe-table tbody tr td:last-child {
+      border-right: none;
+  }
+  .moe-table tbody tr:last-child td {
+      border-bottom: none;
   }
   .moe-table tbody tr td.metric-name {
-    text-align: left;
-    font-weight: 500;
-    color: #1a2b3c;
-    white-space: nowrap;
+      text-align: left;
+      font-weight: 600;
+      color: #0f172a;
+      white-space: nowrap;
+      background: #f8fafc;
   }
-  .moe-table tbody tr:nth-child(even) td { background: #f5f9fd; }
-  .moe-table tbody tr:nth-child(odd)  td { background: #ffffff; }
-  .moe-table tbody tr:hover td { background: #e8f2fb; }
+  .moe-table tbody tr:hover td { 
+      background: #f1f5f9; 
+  }
+  .moe-table tbody tr:hover td.metric-name { 
+      background: #e2e8f0; 
+  }
 
-  /* ── title ── */
+  /* Typography */
   .dash-title {
-    font-size: 20px; font-weight: 700; color: #1a2b3c;
-    margin-bottom: 4px;
+      font-size: 24px; 
+      font-weight: 700; 
+      color: #0f172a;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
   }
   .dash-sub {
-    font-size: 13px; color: #666; margin-bottom: 18px;
+      font-size: 14px; 
+      color: #64748b; 
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
   }
 
-  /* ── client badge ── */
+  /* Badges */
   .badge {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    margin-right: 6px;
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
   }
-  .badge-pronto  { background: #dbeafe; color: #1d4ed8; }
-  .badge-snabbit { background: #fce7f3; color: #be185d; }
+  .badge-pronto  { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+  .badge-snabbit { background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ─── FETCH RAW DATA ───────────────────────────────────────────────────────────
-@st.cache_data(ttl=300, show_spinner="Fetching data from Redash…")
-def fetch_redash(query_id: int, api_key: str) -> pd.DataFrame:
-    url = f"{REDASH_BASE_URL}/api/queries/{query_id}/results"
-    resp = requests.get(url, params={"api_key": api_key}, timeout=60)
+@st.cache_data(ttl=300, show_spinner="Syncing with database…")
+def fetch_redash() -> pd.DataFrame:
+    url = f"{REDASH_BASE_URL}/api/queries/{QUERY_ID}/results"
+    resp = requests.get(url, params={"api_key": REDASH_API_KEY}, timeout=60)
     resp.raise_for_status()
     rows = resp.json()["query_result"]["data"]["rows"]
     return pd.DataFrame(rows)
 
 
 # ─── COMPUTE METRICS ──────────────────────────────────────────────────────────
-def compute_metrics(df: pd.DataFrame, client_filter: list[str]) -> dict:
-    """
-    Expects columns from milestones_data raw export:
-      phone_number, assignee_id, milestone_name, milestone_date, client
-    Returns dict: metric_name -> {window_label: value}
-    """
+def compute_metrics(df: pd.DataFrame, client_filter: list) -> tuple:
     today = date.today()
 
     df["milestone_date"] = pd.to_datetime(df["milestone_date"]).dt.date
@@ -122,18 +151,18 @@ def compute_metrics(df: pd.DataFrame, client_filter: list[str]) -> dict:
         f"L7D ({(today-timedelta(7)).strftime('%m-%d')})": today - timedelta(7),
     }
 
-    # ── per-lead flags (one row per phone_number × assignee_id × date) ──
+    # Per-lead flags
     lead = (
         df.groupby(["phone_number", "assignee_id", "milestone_date"])
         .apply(lambda g: pd.Series({
-            "has_app_dl":           int((g["milestone_name"] == "mitra_app_download").any()),
-            "has_training":         int((g["milestone_name"] == "training_completed").any()),
-            "has_fod":              int((g["milestone_name"] == "first_date_of_work").any()),
+            "has_app_dl":   int((g["milestone_name"] == "mitra_app_download").any()),
+            "has_training": int((g["milestone_name"] == "training_completed").any()),
+            "has_fod":      int((g["milestone_name"] == "first_date_of_work").any()),
         }))
         .reset_index()
     )
 
-    # ── VL first dates (for New VL logic) ──
+    # VL first dates
     vl_first = (
         df.groupby("assignee_id")["milestone_date"]
         .min()
@@ -151,7 +180,6 @@ def compute_metrics(df: pd.DataFrame, client_filter: list[str]) -> dict:
     lead = lead.merge(vl, on="assignee_id", how="left")
 
     results = {}
-
     metric_defs = [
         "VL Count (App Download)",
         "Lead Count",
@@ -167,8 +195,7 @@ def compute_metrics(df: pd.DataFrame, client_filter: list[str]) -> dict:
         results[metric] = {}
 
     for label, cutoff in windows.items():
-        # slice
-        is_today     = label.startswith(str(today))
+        is_today = label.startswith(str(today))
         is_yesterday = label.startswith(str(today - timedelta(1)))
 
         if is_today:
@@ -187,7 +214,6 @@ def compute_metrics(df: pd.DataFrame, client_filter: list[str]) -> dict:
         results["Training Completed"][label]       = w[w["has_training"] == 1]["phone_number"].nunique()
         results["FT Done"][label]                  = w[w["has_fod"] == 1]["phone_number"].nunique()
 
-        # New VL (Leads) — VLs whose first-ever referral date falls in window
         if is_today:
             vl_mask = vl["first_referral_date"] == today
         elif is_yesterday:
@@ -196,7 +222,6 @@ def compute_metrics(df: pd.DataFrame, client_filter: list[str]) -> dict:
             vl_mask = vl["first_referral_date"] >= cutoff
         results["New VL Count (Leads)"][label] = vl[vl_mask]["assignee_id"].nunique()
 
-        # New VL (PLs) — VLs whose first-ever FOD falls in window
         vl_fod = vl.dropna(subset=["first_fod_date"])
         if is_today:
             vl_fod_mask = vl_fod["first_fod_date"] == today
@@ -210,33 +235,28 @@ def compute_metrics(df: pd.DataFrame, client_filter: list[str]) -> dict:
 
 
 # ─── RENDER TABLE ─────────────────────────────────────────────────────────────
-def render_table(results: dict, window_labels: list[str], title: str):
-    today     = date.today()
+def render_table(results: dict, window_labels: list, title: str):
+    today = date.today()
     yesterday = today - timedelta(1)
 
-    # header date labels
-    date_headers = [
-        ("", ""),                             # metric col
-        (str(today),    ""),                  # today
-        (str(yesterday),""),                  # yesterday
-        (str(today - timedelta(3)), "L3D"),   # L3D anchor date
-        (str(today - timedelta(7)), "L7D"),   # L7D anchor date
-    ]
+    header_date_row = f"""
+    <tr class='date-row'>
+        <th rowspan='2' class='metric-label' style='text-align: left; vertical-align: bottom;'>Metrics Overview</th>
+        <th>{today.strftime('%b %d, %Y')}</th>
+        <th>{yesterday.strftime('%b %d, %Y')}</th>
+        <th class='window-header'>{(today - timedelta(3)).strftime('%b %d')}</th>
+        <th class='window-header'>{(today - timedelta(7)).strftime('%b %d')}</th>
+    </tr>
+    """
 
-    header_date_row = "<tr class='date-row'>"
-    header_date_row += "<th rowspan='2' class='metric-label'>Metrics (MOE)</th>"
-    header_date_row += f"<th>{today}</th>"
-    header_date_row += f"<th>{yesterday}</th>"
-    header_date_row += f"<th class='window-header'>{today - timedelta(3)}</th>"
-    header_date_row += f"<th class='window-header'>{today - timedelta(7)}</th>"
-    header_date_row += "</tr>"
-
-    header_label_row = "<tr class='label-row'>"
-    header_label_row += f"<th>{today.strftime('%Y-%m-%d')}</th>"
-    header_label_row += f"<th>{yesterday.strftime('%Y-%m-%d')}</th>"
-    header_label_row += "<th class='window-header'>L3D</th>"
-    header_label_row += "<th class='window-header'>L7D</th>"
-    header_label_row += "</tr>"
+    header_label_row = f"""
+    <tr class='label-row'>
+        <th>Today</th>
+        <th>Yesterday</th>
+        <th class='window-header'>L3D</th>
+        <th class='window-header'>L7D</th>
+    </tr>
+    """
 
     body = ""
     for metric, vals in results.items():
@@ -248,18 +268,22 @@ def render_table(results: dict, window_labels: list[str], title: str):
         body += "</tr>"
 
     html = f"""
-    <div style='margin-bottom:24px'>
-      <div class='dash-title'>{title}</div>
+    <div class='dashboard-container'>
+        <div style='margin-bottom:20px'>
+            <div class='dash-title'>{title}</div>
+        </div>
+        <div style='overflow-x: auto;'>
+            <table class='moe-table'>
+                <thead>
+                    {header_date_row}
+                    {header_label_row}
+                </thead>
+                <tbody>
+                    {body}
+                </tbody>
+            </table>
+        </div>
     </div>
-    <table class='moe-table'>
-      <thead>
-        {header_date_row}
-        {header_label_row}
-      </thead>
-      <tbody>
-        {body}
-      </tbody>
-    </table>
     """
     st.markdown(html, unsafe_allow_html=True)
 
@@ -269,55 +293,65 @@ def main():
     today = date.today()
 
     st.markdown(f"""
-    <div class='dash-title'>📊 Pronto & Snabbit — MOE Dashboard</div>
+    <div class='dash-title'>🚀 MOE Performance Dashboard</div>
     <div class='dash-sub'>
       <span class='badge badge-pronto'>Pronto</span>
       <span class='badge badge-snabbit'>Snabbit</span>
-      &nbsp;·&nbsp; As of <b>{today}</b>
+      <span style='color: #cbd5e1;'>|</span>
+      <span>Live as of <b>{today.strftime('%B %d, %Y')}</b></span>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── sidebar controls ──
+    # ── Sidebar Controls ──
     with st.sidebar:
-        st.header("Settings")
-        api_key  = st.text_input("Redash API Key",  value=REDASH_API_KEY,  type="password")
-        query_id = st.number_input("Query ID", value=QUERY_ID, step=1)
-        clients  = st.multiselect(
-            "Clients", ["pronto", "snabbit"], default=["pronto", "snabbit"]
+        st.markdown("### ⚙️ Filters")
+        
+        clients = st.multiselect(
+            "Select Clients", 
+            ["pronto", "snabbit"], 
+            default=["pronto", "snabbit"],
+            format_func=lambda x: x.capitalize()
         )
-        refresh  = st.button("🔄 Refresh Data")
-        if refresh:
+        
+        view = st.radio(
+            "Display Mode", 
+            ["Combined", "Pronto only", "Snabbit only"]
+        )
+        
+        st.divider()
+        if st.button("🔄 Force Data Refresh", use_container_width=True):
             st.cache_data.clear()
+            st.rerun()
 
-    # ── fetch ──
+    # ── Fetch Data ──
     try:
-        df_raw = fetch_redash(int(query_id), api_key)
+        df_raw = fetch_redash()
     except Exception as e:
-        st.error(f"Failed to fetch data from Redash: {e}")
-        st.info("Make sure your API key and Query ID are correct in the sidebar.")
-        return
+        st.error("⚠️ Failed to establish a connection with the database.")
+        st.stop()
 
     if df_raw.empty:
-        st.warning("No data returned from Redash query.")
-        return
+        st.warning("No data found for the current configuration.")
+        st.stop()
 
-    # ── split by client or show combined ──
-    view = st.radio("View", ["Combined", "Pronto only", "Snabbit only"], horizontal=True)
-
+    # ── Render Views ──
     if view == "Combined":
         results, labels = compute_metrics(df_raw, clients)
-        render_table(results, labels, "Pronto + Snabbit — Combined")
+        render_table(results, labels, "Pronto + Snabbit (Combined Data)")
 
     elif view == "Pronto only":
         results, labels = compute_metrics(df_raw, ["pronto"])
-        render_table(results, labels, "Pronto")
+        render_table(results, labels, "Pronto Performance")
 
     else:
         results, labels = compute_metrics(df_raw, ["snabbit"])
-        render_table(results, labels, "Snabbit")
+        render_table(results, labels, "Snabbit Performance")
 
-    st.markdown(f"<div style='font-size:11px;color:#999;margin-top:12px'>Data refreshes every 5 min · Last load: {pd.Timestamp.now().strftime('%H:%M:%S')}</div>", unsafe_allow_html=True)
-
+    st.markdown(
+        f"<div style='text-align: right; font-size:12px; color:#94a3b8; margin-top: 16px;'>"
+        f"Data automatically caches for 5 minutes. Last synced: {pd.Timestamp.now().strftime('%H:%M:%S')}</div>", 
+        unsafe_allow_html=True
+    )
 
 if __name__ == "__main__":
     main()
