@@ -15,118 +15,143 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── PREMIUM CSS STYLING (THEME RESPONSIVE) ───────────────────────────────────
+# ─── ULTRA PREMIUM CSS ────────────────────────────────────────────────────────
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   
   html, body, [class*="css"] { 
-      font-family: 'Inter', sans-serif; 
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
   }
   
-  /* Main Container - Uses Streamlit Theme Variables */
-  .dashboard-container {
+  /* Hide Streamlit default styling elements for a cleaner look */
+  header[data-testid="stHeader"] { background: transparent; }
+  
+  /* Main Card Container */
+  .premium-card {
       background: var(--background-color);
-      border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-      border: 1px solid var(--secondary-background-color);
+      border-radius: 16px;
+      padding: 32px;
       margin-bottom: 2rem;
+      /* Soft Apple-style layered shadow for depth */
+      box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.05),
+        0 10px 15px -3px rgba(0, 0, 0, 0.025),
+        0 25px 50px -12px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(128, 128, 128, 0.15);
+      position: relative;
+      overflow: hidden;
   }
 
-  /* Table Wrapper */
+  /* Table Reset & Setup */
   .moe-table { 
-      border-collapse: separate; 
-      border-spacing: 0;
+      border-collapse: collapse; 
       width: 100%; 
       font-size: 14px; 
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid var(--secondary-background-color);
+      margin-top: 8px;
   }
 
-  /* Header Styles */
+  /* Header Typography & Styling */
   .moe-table thead tr th {
-      background: var(--secondary-background-color);
       color: var(--text-color);
+      opacity: 0.6;
       font-weight: 600;
-      text-align: center;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--background-color);
-      border-right: 1px solid var(--background-color);
-      font-size: 13px;
+      text-align: right;
+      padding: 16px 24px;
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
   }
-  .moe-table thead tr th:last-child {
-      border-right: none;
+  .moe-table thead tr th:first-child {
+      text-align: left;
   }
-  .moe-table thead tr.date-row th.window-header {
-      background: rgba(29, 78, 216, 0.15); /* Soft transparent blue */
+  
+  /* Special Highlight for Window Columns */
+  .moe-table thead tr.date-row th.window-header,
+  .moe-table thead tr.label-row th.window-header {
       color: var(--primary-color);
+      opacity: 0.9;
+      background: rgba(128, 128, 128, 0.03);
   }
 
   /* Data Rows */
-  .moe-table tbody tr td {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--secondary-background-color);
-      border-right: 1px solid var(--secondary-background-color);
-      text-align: center;
-      color: var(--text-color);
-      font-variant-numeric: tabular-nums;
+  .moe-table tbody tr {
+      transition: all 0.2s ease-in-out;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.08);
   }
-  .moe-table tbody tr td:last-child {
-      border-right: none;
-  }
-  .moe-table tbody tr:last-child td {
+  .moe-table tbody tr:last-child {
       border-bottom: none;
+  }
+  .moe-table tbody tr td {
+      padding: 16px 24px;
+      text-align: right;
+      color: var(--text-color);
+      opacity: 0.85;
+      /* Tabular nums align digits perfectly */
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+      font-size: 15px;
   }
   .moe-table tbody tr td.metric-name {
       text-align: left;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--text-color);
+      opacity: 1;
       white-space: nowrap;
-      background: var(--secondary-background-color);
-      opacity: 0.9;
+      font-size: 14px;
   }
   
-  /* Hover effects */
-  .moe-table tbody tr:hover td { 
-      background: rgba(128, 128, 128, 0.05); 
-  }
-  .moe-table tbody tr:hover td.metric-name { 
-      background: rgba(128, 128, 128, 0.15); 
+  /* L3D / L7D Column subtle backgrounds */
+  .moe-table tbody tr td.window-data {
+      background: rgba(128, 128, 128, 0.02);
   }
 
-  /* Typography */
-  .dash-title {
-      font-size: 24px; 
-      font-weight: 700; 
-      color: var(--text-color);
-      margin-bottom: 8px;
-      letter-spacing: -0.02em;
+  /* Hover Effects */
+  .moe-table tbody tr:hover { 
+      background: var(--secondary-background-color);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      border-radius: 8px;
+  }
+  
+  /* Title & Subtitle */
+  .gradient-title {
+      font-size: 28px; 
+      font-weight: 800; 
+      margin-bottom: 4px;
+      letter-spacing: -0.03em;
+      /* Premium Stripe-like gradient text */
+      background: linear-gradient(135deg, var(--text-color) 0%, var(--primary-color) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: inline-block;
   }
   .dash-sub {
-      font-size: 14px; 
+      font-size: 13px; 
       color: var(--text-color);
-      opacity: 0.7;
-      margin-bottom: 24px;
+      opacity: 0.6;
+      margin-bottom: 32px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
+      font-weight: 500;
   }
 
-  /* Badges */
+  /* Vercel-style Pill Badges */
   .badge {
       display: inline-flex;
       align-items: center;
-      padding: 4px 12px;
-      border-radius: 9999px;
-      font-size: 12px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 11px;
       font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
   }
-  .badge-pronto  { background: rgba(37, 99, 235, 0.15); color: #3b82f6; border: 1px solid rgba(37, 99, 235, 0.3); }
-  .badge-snabbit { background: rgba(219, 39, 119, 0.15); color: #ec4899; border: 1px solid rgba(219, 39, 119, 0.3); }
+  /* Using dynamic RGBA colors to look great in both dark/light modes */
+  .badge-pronto  { background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); }
+  .badge-snabbit { background: rgba(236, 72, 153, 0.1); color: #ec4899; border: 1px solid rgba(236, 72, 153, 0.2); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -241,11 +266,11 @@ def render_table(results: dict, window_labels: list, title: str):
     today = date.today()
     yesterday = today - timedelta(1)
 
-    # Note: Intentionally zero-indented HTML to prevent Markdown parser from triggering a code block
+    # HTML explicitly left-aligned with no indentation to prevent markdown <pre> rendering
     header_date_row = f"""<tr class='date-row'>
-<th rowspan='2' class='metric-label' style='text-align: left; vertical-align: bottom;'>Metrics Overview</th>
-<th>{today.strftime('%b %d, %Y')}</th>
-<th>{yesterday.strftime('%b %d, %Y')}</th>
+<th rowspan='2' style='text-align: left; vertical-align: bottom; border-bottom: none;'>Key Performance Indicator</th>
+<th>{today.strftime('%b %d')}</th>
+<th>{yesterday.strftime('%b %d')}</th>
 <th class='window-header'>{(today - timedelta(3)).strftime('%b %d')}</th>
 <th class='window-header'>{(today - timedelta(7)).strftime('%b %d')}</th>
 </tr>"""
@@ -261,17 +286,19 @@ def render_table(results: dict, window_labels: list, title: str):
     for metric, vals in results.items():
         body += "<tr>"
         body += f"<td class='metric-name'>{metric}</td>"
-        for label in window_labels:
+        
+        # Parse through the dates, adding the specific highlight class to L3D/L7D
+        for idx, label in enumerate(window_labels):
             v = vals.get(label, 0)
-            body += f"<td>{v:,}</td>"
+            formatted_val = f"{v:,}" if v > 0 else "<span style='opacity: 0.2;'>-</span>"
+            css_class = "window-data" if idx >= 2 else ""
+            body += f"<td class='{css_class}'>{formatted_val}</td>"
+        
         body += "</tr>\n"
 
-    # Fully flushed HTML to bypass markdown code formatting
-    html = f"""<div class='dashboard-container'>
-<div style='margin-bottom:20px'>
-<div class='dash-title'>{title}</div>
-</div>
-<div style='overflow-x: auto;'>
+    html = f"""<div class='premium-card'>
+<div class='gradient-title'>{title}</div>
+<div style='overflow-x: auto; margin-top: 16px;'>
 <table class='moe-table'>
 <thead>
 {header_date_row}
@@ -283,6 +310,7 @@ def render_table(results: dict, window_labels: list, title: str):
 </table>
 </div>
 </div>"""
+    
     st.markdown(html, unsafe_allow_html=True)
 
 
@@ -290,32 +318,39 @@ def render_table(results: dict, window_labels: list, title: str):
 def main():
     today = date.today()
 
-    st.markdown(f"""<div class='dash-title'>🚀 MOE Performance Dashboard</div>
-<div class='dash-sub'>
-<span class='badge badge-pronto'>Pronto</span>
-<span class='badge badge-snabbit'>Snabbit</span>
-<span style='opacity: 0.5;'>|</span>
-<span>Live as of <b>{today.strftime('%B %d, %Y')}</b></span>
-</div>""", unsafe_allow_html=True)
+    # Premium top banner header
+    st.markdown(f"""
+<div style='margin-bottom: 2rem; padding-left: 8px;'>
+    <div style='font-size: 32px; font-weight: 800; letter-spacing: -0.04em; color: var(--text-color);'>
+        MOE Performance
+    </div>
+    <div class='dash-sub'>
+        <span class='badge badge-pronto'>Pronto</span>
+        <span class='badge badge-snabbit'>Snabbit</span>
+        <span style='opacity: 0.3;'>•</span>
+        <span>Live snapshot as of {today.strftime('%B %d, %Y')}</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
     # ── Sidebar Controls ──
     with st.sidebar:
-        st.markdown("### ⚙️ Filters")
+        st.markdown("<h3 style='font-weight: 700; letter-spacing: -0.02em;'>Configuration</h3>", unsafe_allow_html=True)
         
         clients = st.multiselect(
-            "Select Clients", 
+            "Target Organizations", 
             ["pronto", "snabbit"], 
             default=["pronto", "snabbit"],
             format_func=lambda x: x.capitalize()
         )
         
         view = st.radio(
-            "Display Mode", 
-            ["Combined", "Pronto only", "Snabbit only"]
+            "Display Layout", 
+            ["Combined Overview", "Pronto Isolated", "Snabbit Isolated"]
         )
         
         st.divider()
-        if st.button("🔄 Force Data Refresh", use_container_width=True):
+        if st.button("⚡ Force Sync Data", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
@@ -323,29 +358,30 @@ def main():
     try:
         df_raw = fetch_redash()
     except Exception as e:
-        st.error("⚠️ Failed to establish a connection with the database.")
+        st.error("⚠️ Failed to establish a secure connection with the database.")
         st.stop()
 
     if df_raw.empty:
-        st.warning("No data found for the current configuration.")
+        st.warning("No operational data found for the current configuration.")
         st.stop()
 
     # ── Render Views ──
-    if view == "Combined":
+    if view == "Combined Overview":
         results, labels = compute_metrics(df_raw, clients)
-        render_table(results, labels, "Pronto + Snabbit (Combined Data)")
+        render_table(results, labels, "Combined Intelligence")
 
-    elif view == "Pronto only":
+    elif view == "Pronto Isolated":
         results, labels = compute_metrics(df_raw, ["pronto"])
-        render_table(results, labels, "Pronto Performance")
+        render_table(results, labels, "Pronto Analytics")
 
     else:
         results, labels = compute_metrics(df_raw, ["snabbit"])
-        render_table(results, labels, "Snabbit Performance")
+        render_table(results, labels, "Snabbit Analytics")
 
+    # Premium subtle footer
     st.markdown(
-        f"<div style='text-align: right; font-size:12px; color:var(--text-color); opacity: 0.6; margin-top: 16px;'>"
-        f"Data automatically caches for 5 minutes. Last synced: {pd.Timestamp.now().strftime('%H:%M:%S')}</div>", 
+        f"<div style='text-align: right; font-size: 12px; font-weight: 500; color: var(--text-color); opacity: 0.4; margin-top: 1rem; padding-right: 8px;'>"
+        f"Real-time cache cycle: 5m &nbsp;·&nbsp; Last sync: {pd.Timestamp.now().strftime('%H:%M:%S')}</div>", 
         unsafe_allow_html=True
     )
 
